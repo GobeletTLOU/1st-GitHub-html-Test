@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Esquive PWA</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body { margin: 0; overflow: hidden; background: #222; font-family: sans-serif; touch-action: none; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; font-size: 20px; pointer-events: none; }
+        #gameover { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            color: white; text-align: center; display: none; 
+        }
+        button { padding: 10px 20px; font-size: 18px; cursor: pointer; background: #00d2ff; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="ui">Score: <span id="scoreVal">0</span></div>
+<div id="gameover">
+    <h1>Perdu !</h1>
+    <p>Score final: <span id="finalScore">0</span></p>
+    <button onclick="resetGame()">Rejouer</button>
+</div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const uiScore = document.getElementById('scoreVal');
+    const uiGameOver = document.getElementById('gameover');
+    const uiFinalScore = document.getElementById('finalScore');
+
+    let width, height;
+    let player = { x: 0, y: 0, size: 30, color: '#00d2ff' };
+    let enemies = [];
+    let score = 0;
+    let isGameOver = false;
+    let animationId;
+
+    // Configuration PWA : Service Worker
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js')
+            .then(() => console.log('Service Worker enregistré'));
+    }
+
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        player.x = width / 2;
+        player.y = height - 100;
+    }
+
+    // Gestion Tactile et Souris
+    function movePlayer(e) {
+        if(isGameOver) return;
+        let cx = e.clientX || e.touches[0].clientX;
+        player.x = cx;
+        // Garder le joueur dans l'écran
+        if(player.x < 0) player.x = 0;
+        if(player.x > width) player.x = width;
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', movePlayer);
+    window.addEventListener('touchmove', movePlayer, {passive: false});
+
+    function spawnEnemy() {
+        const size = Math.random() * 30 + 20;
+        enemies.push({
+            x: Math.random() * width,
+            y: -size,
+            size: size,
+            speed: Math.random() * 3 + 2 + (score * 0.01) // Vitesse augmente avec le score
+        });
+    }
+
+    function update() {
+        if(isGameOver) return;
+        ctx.clearRect(0, 0, width, height);
+
+        // Joueur
+        ctx.fillStyle = player.color;
+        ctx.fillRect(player.x - player.size/2, player.y - player.size/2, player.size, player.size);
+
+        // Ennemis
+        if(Math.random() < 0.05) spawnEnemy();
+
+        for(let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            e.y += e.speed;
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(e.x - e.size/2, e.y - e.size/2, e.size, e.size);
+
+            // Collision
+            let dx = player.x - e.x;
+            let dy = player.y - e.y;
+            let distance = Math.sqrt(dx*dx + dy*dy);
+            
+            if (distance < (player.size/2 + e.size/2)) {
+                gameOver();
+            }
+
+            // Nettoyage hors écran
+            if(e.y > height) {
+                enemies.splice(i, 1);
+                i--;
+                score++;
+                uiScore.innerText = score;
+            }
+        }
+        animationId = requestAnimationFrame(update);
+    }
+
+    function gameOver() {
+        isGameOver = true;
+        cancelAnimationFrame(animationId);
+        uiGameOver.style.display = 'block';
+        uiFinalScore.innerText = score;
+    }
+
+    function resetGame() {
+        enemies = [];
+        score = 0;
+        isGameOver = false;
+        uiScore.innerText = '0';
+        uiGameOver.style.display = 'none';
+        player.x = width / 2;
+        update();
+    }
+
+    resize();
+    update();
+</script>
+</body>
+</html>
